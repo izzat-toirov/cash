@@ -6,6 +6,7 @@ import {
   IsOptional,
   Min,
   Matches,
+  IsDateString,
 } from 'class-validator';
 
 export enum TransactionType {
@@ -19,9 +20,7 @@ export class CreateTransactionDto {
     example: '2026-04-15',
   })
   @IsString()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
-    message: "date YYYY-MM-DD formatida bo'lishi kerak (masalan: 2026-04-15)",
-  })
+  @IsDateString()
   date: string;
 
   @ApiProperty({

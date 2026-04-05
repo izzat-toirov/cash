@@ -13,7 +13,7 @@ import {
  */
 @Controller('auth')
 @UseGuards(ApiKeyGuard)
-@ApiTags('Health')
+@ApiTags('Auth')
 @ApiHeader({
   name: 'x-api-key',
   description: 'API kalit - autentifikatsiya uchun',

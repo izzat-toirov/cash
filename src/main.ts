@@ -8,7 +8,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: [process.env.FRONTEND_URL || '*'],
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3001'],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
@@ -20,7 +20,6 @@ async function bootstrap() {
       transform: true,
     }),
   );
-// asS
 
   app.useGlobalFilters(new HttpExceptionFilter());
 

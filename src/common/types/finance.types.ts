@@ -6,6 +6,13 @@ export interface FinanceRecord {
   category: string;
   type: 'income' | 'expense';
   timestamp?: string;
+  isPlanned?: boolean;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  type: 'income' | 'expense';
 }
 
 export interface SheetData {

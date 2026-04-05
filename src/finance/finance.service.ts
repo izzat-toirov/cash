@@ -5,7 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { GoogleSheetsService } from '../google-sheets/google-sheets.service';
-import { FinanceRecord } from '../common/interfaces/finance-record.interface';
+import { FinanceRecord } from '../common/types/finance.types';
+import { SHEET_CONSTANTS } from '../common/constants/sheets.constants';
 
 @Injectable()
 export class FinanceService {
@@ -40,20 +41,21 @@ export class FinanceService {
         await this.googleSheetsService.addIncomeRow(sheetName, rowData);
       }
   
-    } catch (error: any) {
-      this.logger.error(`Xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Xatolik: ${message}`);
       throw new BadRequestException('Finance record qo\'shishda xatolik');
     }
   }
 
   // --- SVODKA MA'LUMOTLARINI OLISH ---
   async getSvodkaReport() {
-    const sheet = 'Сводка'; // Varaq nomi kirillchada
+    const sheet = SHEET_CONSTANTS.SVODKA_SHEET_NAME;
     const ranges = [
-      `${sheet}!D10`,     // Hozirgi oy (Aprel, May...)
-      `${sheet}!I15`,     // Raqamli natija (Formula: =E17-D17)
-      `${sheet}!B28:E45`, // Xarajatlar jadvali
-      `${sheet}!G28:J45`, // Daromadlar jadvali
+      `${sheet}!${SHEET_CONSTANTS.RANGES.SVODKA.CURRENT_MONTH}`,
+      `${sheet}!${SHEET_CONSTANTS.RANGES.SVODKA.INITIAL_AMOUNT}`,
+      `${sheet}!${SHEET_CONSTANTS.RANGES.SVODKA.EXPENSE_CATEGORIES}`,
+      `${sheet}!${SHEET_CONSTANTS.RANGES.SVODKA.INCOME_CATEGORIES}`,
     ];
 
     const data = await this.googleSheetsService.getBatchData(ranges);
@@ -111,18 +113,20 @@ export class FinanceService {
   }
 
   private async getYearRecords(year: number): Promise<FinanceRecord[]> {
-    const allRecords: FinanceRecord[] = [];
+    const sheetPromises: Promise<FinanceRecord[]>[] = [];
+    
     for (let month = 1; month <= 12; month++) {
-      try {
-        const sheetName = this.googleSheetsService.getSheetName(year, month);
-        const records =
-          await this.googleSheetsService.getFinanceRecords(sheetName);
-        allRecords.push(...records);
-      } catch {
-        // Bu oy varag'i yo'q — skip
-      }
+      const sheetName = this.googleSheetsService.getSheetName(year, month);
+      const promise = this.googleSheetsService.getFinanceRecords(sheetName)
+        .catch(() => {
+          this.logger.warn(`Sheet "${sheetName}" not found for ${year}-${month}`);
+          return [] as FinanceRecord[];
+        });
+      sheetPromises.push(promise);
     }
-    return allRecords;
+    
+    const results = await Promise.all(sheetPromises);
+    return results.flat();
   }
 
   // ─── UPDATE ───────────────────────────────────────────────────────────────────
@@ -270,20 +274,31 @@ export class FinanceService {
     let year: number;
     let month: number;
 
-    if (date.includes('-') && date.indexOf('-') === 4) {
-      // YYYY-MM-DD
-      const parts = date.split('-');
-      year = parseInt(parts[0]);
-      month = parseInt(parts[1]);
-    } else if (date.includes('.')) {
-      // DD.MM.YYYY
-      const parts = date.split('.');
-      year = parseInt(parts[2]);
-      month = parseInt(parts[1]);
-    } else {
+    try {
+      if (date.includes('-') && date.indexOf('-') === 4) {
+        // YYYY-MM-DD
+        const parts = date.split('-');
+        year = parseInt(parts[0]);
+        month = parseInt(parts[1]);
+      } else if (date.includes('.')) {
+        // DD.MM.YYYY
+        const parts = date.split('.');
+        year = parseInt(parts[2]);
+        month = parseInt(parts[1]);
+      } else {
+        return this.googleSheetsService.getCurrentMonthSheetName();
+      }
+
+      // Validate parsed values
+      if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+        this.logger.warn(`Invalid date format: ${date}, using current month`);
+        return this.googleSheetsService.getCurrentMonthSheetName();
+      }
+
+      return this.googleSheetsService.getSheetName(year, month);
+    } catch (error) {
+      this.logger.error(`Error parsing date "${date}": ${error instanceof Error ? error.message : String(error)}`);
       return this.googleSheetsService.getCurrentMonthSheetName();
     }
-
-    return this.googleSheetsService.getSheetName(year, month);
   }
 }

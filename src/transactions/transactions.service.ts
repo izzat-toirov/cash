@@ -16,11 +16,6 @@ export class TransactionsService {
     const month = dto.month ?? new Date().getMonth() + 1;
     const sheetName = this.sheetsService.getSheetName(year, month);
 
-    const isValid = await this.sheetsService.validateSheetNameSync(sheetName);
-    if (!isValid) {
-      this.logger.warn(`Sheet name mismatch: "${sheetName}" does not match Сводка!D10`);
-    }
-
     if (dto.type === 'expense') {
       // ✅ SVODKA FORMULA: B=date, C=amount, D=description, E=category
       // =SUMIF(Sheet!E:E; $B27; Sheet!C:C) → E=kategoriya, C=summa

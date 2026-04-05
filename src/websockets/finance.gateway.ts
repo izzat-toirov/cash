@@ -6,20 +6,45 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Logger } from '@nestjs/common';
+import { Logger, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Server, Socket } from 'socket.io';
+
+interface BroadcastPayload {
+  type: 'record' | 'summary' | 'newRecord' | 'updatedRecord' | 'deletedRecord';
+  data: unknown;
+}
+
+interface FinancePayload { 
+  records: unknown[]; 
+  summary: unknown;
+}
+
+interface TransactionPayload { 
+  transactions: unknown[]; 
+  total: number;
+}
+
+interface FinanceDataPayload {
+  records: unknown;
+  summary: unknown;
+  timestamp: string;
+}
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
     methods: ['GET', 'POST'],
     credentials: true,
   },
 })
+@Injectable()
 export class FinanceGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server: Server;
   private logger: Logger = new Logger('FinanceGateway');
+
+  constructor(private configService: ConfigService) {}
 
   afterInit(server: Server) {
     this.logger.log('WebSocket Gateway initialized');
@@ -41,12 +66,24 @@ export class FinanceGateway
 
     // Dastlabki ma'lumotlarni yuborish (endpoint orqali olish)
     try {
-      const financeResponse = await fetch(`http://localhost:3001/api/finance/month?year=${year}&month=${month}`, {
-        headers: { 'x-api-key': 'kalit' }
-      });
-      const budgetResponse = await fetch(`http://localhost:3001/api/budget/summary?year=${year}&month=${month}`, {
-        headers: { 'x-api-key': 'kalit' }
-      });
+      const baseUrl = this.configService.get('BASE_URL') || 'http://localhost:3000';
+      const apiKey = this.configService.get('API_KEY');
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const [financeResponse, budgetResponse] = await Promise.all([
+        fetch(`${baseUrl}/api/finance/month?year=${year}&month=${month}`, {
+          headers: { 'x-api-key': apiKey || '' },
+          signal: controller.signal
+        }),
+        fetch(`${baseUrl}/api/budget/summary?year=${year}&month=${month}`, {
+          headers: { 'x-api-key': apiKey || '' },
+          signal: controller.signal
+        })
+      ]);
+
+      clearTimeout(timeoutId);
 
       const records = await financeResponse.json();
       const summary = await budgetResponse.json();
@@ -83,8 +120,8 @@ export class FinanceGateway
   async broadcastFinanceUpdate(
     month: number,
     year: number,
-    type: 'record' | 'summary' | 'newRecord' | 'updatedRecord' | 'deletedRecord',
-    data: any,
+    type: BroadcastPayload['type'],
+    data: BroadcastPayload['data'],
   ) {
     this.server.to(`finance_${year}_${month}`).emit('financeData', {
       type,
@@ -93,11 +130,11 @@ export class FinanceGateway
     });
   }
 
-  async broadcastNewRecord(record: any, month: number, year: number) {
+  async broadcastNewRecord(record: BroadcastPayload['data'], month: number, year: number) {
     await this.broadcastFinanceUpdate(month, year, 'newRecord', record);
   }
 
-  async broadcastUpdatedRecord(record: any, month: number, year: number) {
+  async broadcastUpdatedRecord(record: BroadcastPayload['data'], month: number, year: number) {
     await this.broadcastFinanceUpdate(month, year, 'updatedRecord', record);
   }
 
@@ -105,7 +142,7 @@ export class FinanceGateway
     await this.broadcastFinanceUpdate(month, year, 'deletedRecord', { id: recordId });
   }
 
-  async broadcastBudgetUpdate(month: number, year: number, summary: any) {
+  async broadcastBudgetUpdate(month: number, year: number, summary: BroadcastPayload['data']) {
     await this.broadcastFinanceUpdate(month, year, 'summary', summary);
   }
 }

@@ -6,6 +6,8 @@ import {
   SheetData,
   SvodkaData,
 } from '../common/types/finance.types';
+import { SHEET_CONSTANTS } from '../common/constants/sheets.constants';
+import { safeParseFloat } from '../common/utils/number-validation.util';
 
 @Injectable()
 export class GoogleSheetsService {
@@ -20,23 +22,28 @@ export class GoogleSheetsService {
   ];
 
   constructor(private configService: ConfigService) {
+    const sheetId = this.configService.get<string>('GOOGLE_SHEET_ID');
+    if (!sheetId) {
+      throw new Error('GOOGLE_SHEET_ID is not configured');
+    }
+    this.spreadsheetId = sheetId;
+
+    const privateKey = this.configService.get<string>('GOOGLE_PRIVATE_KEY');
+    if (!privateKey) {
+      throw new Error('GOOGLE_PRIVATE_KEY is not configured');
+    }
+
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: this.configService.get<string>('GOOGLE_SERVICE_ACCOUNT_EMAIL'),
-        private_key: this.configService
-          .get<string>('GOOGLE_PRIVATE_KEY')
-          ?.replace(/\\n/g, '\n'),
+        private_key: privateKey.replace(/\\n/g, '\n'),
       },
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
     this.sheets = google.sheets({ version: 'v4', auth });
-    this.spreadsheetId = this.configService.get<string>('GOOGLE_SHEET_ID') || '';
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // SHEET NAME HELPERS
-  // ─────────────────────────────────────────────────────────────────────────────
 
   getCurrentMonthSheetName(): string {
     const now = new Date();
@@ -47,26 +54,12 @@ export class GoogleSheetsService {
     return this.MONTHS_UZ[month - 1];
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // ADD ROW — expense va income uchun to'g'ri ustunlarga yozadi
-  //
-  // ✅ SVODKA FORMULA MANTIQ:
-  //   Xarajat: B=date, C=amount, D=description, E=category
-  //     =SUMIF(Sheet!E:E; $B27; Sheet!C:C)  → E=kategoriya, C=summa
-  //
-  //   Daromad: H=date, I=description, J=category, K=amount
-  //     =SUMIF(Sheet!J:J; $H27; Sheet!K:K)  → J=kategoriya, K=summa
-  // ─────────────────────────────────────────────────────────────────────────────
 
-  /**
-   * Xarajat qo'shish: B=date, C=amount, D=description, E=category
-   */
   async addExpenseRow(sheetName: string, rowData: string[]): Promise<void> {
     try {
       await this.ensureSheetExists(sheetName);
       const nextRow = await this.getNextAvailableRow(sheetName, 'expense');
 
-      // rowData: [date, amount, description, category]
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
         range: `${sheetName}!B${nextRow}:E${nextRow}`,
@@ -75,8 +68,9 @@ export class GoogleSheetsService {
       });
 
       this.logger.log(`✅ Xarajat ${nextRow}-qatorga yozildi (B:E): ${JSON.stringify(rowData)}`);
-    } catch (error: any) {
-      this.logger.error(`addExpenseRow xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`addExpenseRow xatolik: ${message}`);
       throw error;
     }
   }
@@ -98,8 +92,9 @@ export class GoogleSheetsService {
       });
 
       this.logger.log(`✅ Daromad ${nextRow}-qatorga yozildi (H:K): ${JSON.stringify(rowData)}`);
-    } catch (error: any) {
-      this.logger.error(`addIncomeRow xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`addIncomeRow xatolik: ${message}`);
       throw error;
     }
   }
@@ -134,9 +129,6 @@ export class GoogleSheetsService {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // READ RECORDS
-  // ─────────────────────────────────────────────────────────────────────────────
 
   async getFinanceRecords(sheetName: string): Promise<FinanceRecord[]> {
     const records: FinanceRecord[] = [];
@@ -145,11 +137,10 @@ export class GoogleSheetsService {
     try {
       const expenseResp = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${sheetName}!B5:E1000`,
+        range: `${sheetName}!B5:E${SHEET_CONSTANTS.MAX_ROWS_PER_REQUEST}`,
       });
 
       (expenseResp.data.values || []).forEach((row, index) => {
-        // row[0]=B=date, row[1]=C=amount, row[2]=D=description, row[3]=E=category
         if (row[0] && row[1]) {
           records.push({
             id: `expense-row-${index + 5}`,
@@ -161,15 +152,15 @@ export class GoogleSheetsService {
           });
         }
       });
-    } catch (error: any) {
-      this.logger.error(`Xarajat o'qishda xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Xarajat o'qishda xatolik: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // ✅ DAROMAD: H=date, I=description, J=category, K=amount
     try {
       const incomeResp = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${sheetName}!H5:K1000`,
+        range: `${sheetName}!H5:K${SHEET_CONSTANTS.MAX_ROWS_PER_REQUEST}`,
       });
 
       (incomeResp.data.values || []).forEach((row, index) => {
@@ -185,22 +176,14 @@ export class GoogleSheetsService {
           });
         }
       });
-    } catch (error: any) {
-      this.logger.error(`Daromad o'qishda xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Daromad o'qishda xatolik: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     return records;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // UPDATE ROW
-  // ─────────────────────────────────────────────────────────────────────────────
 
-  /**
-   * ✅ SVODKA formulalarga mos:
-   *   expense → B:E: [date, amount, description, category]
-   *   income  → H:K: [date, description, category, amount]
-   */
   async updateRow(
     sheetName: string,
     rowIndex: number,
@@ -237,15 +220,12 @@ export class GoogleSheetsService {
       });
 
       this.logger.log(`✅ Yangilandi: ${range}`);
-    } catch (error: any) {
-      this.logger.error(`updateRow xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`updateRow xatolik: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // DELETE ROW
-  // ─────────────────────────────────────────────────────────────────────────────
 
   async deleteRow(sheetName: string, rowIndex: number): Promise<void> {
     try {
@@ -271,23 +251,20 @@ export class GoogleSheetsService {
       });
 
       this.logger.log(`✅ O'chirildi: ${sheetName} qator ${rowIndex}`);
-    } catch (error: any) {
-      this.logger.error(`deleteRow xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`deleteRow xatolik: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // CATEGORIES
-  // ─────────────────────────────────────────────────────────────────────────────
 
   async getCategories(): Promise<{ name: string; type: string }[]> {
     try {
       const response = await this.sheets.spreadsheets.values.batchGet({
         spreadsheetId: this.spreadsheetId,
         ranges: [
-          'Сводка!B28:B45', // xarajat kategoriyalari
-          'Сводка!H28:H45', // daromad kategoriyalari
+          'Сводка!B28:B45',
+          'Сводка!H28:H45', 
         ],
       });
   
@@ -304,8 +281,8 @@ export class GoogleSheetsService {
         .map((name) => ({ name, type: 'income' }));
   
       return [...expenses, ...income];
-    } catch (error: any) {
-      this.logger.error(`getCategories xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`getCategories xatolik: ${error instanceof Error ? error.message : String(error)}`);
       return [];
     }
   }
@@ -346,8 +323,8 @@ export class GoogleSheetsService {
       }
 
       return { isValid: false };
-    } catch (error: any) {
-      this.logger.error(`validateCategoryStrict xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`validateCategoryStrict xatolik: ${error instanceof Error ? error.message : String(error)}`);
       return { isValid: false };
     }
   }
@@ -398,8 +375,8 @@ export class GoogleSheetsService {
         }));
 
       return { expensePlanned, expenseActual, incomePlanned, incomeActual, expenseCategories, incomeCategories };
-    } catch (error: any) {
-      this.logger.error(`readSvodka xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`readSvodka xatolik: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
@@ -413,8 +390,8 @@ export class GoogleSheetsService {
       const raw = response.data.values?.[0]?.[0];
       if (!raw) return 0;
       return parseFloat(String(raw).replace(/[^\d.-]/g, '')) || 0;
-    } catch (error: any) {
-      this.logger.error(`getInitialAmount xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`getInitialAmount xatolik: ${error instanceof Error ? error.message : String(error)}`);
       return 0;
     }
   }
@@ -428,13 +405,13 @@ export class GoogleSheetsService {
         requestBody: { values: [[String(amount)]] },
       });
       this.logger.log(`✅ Initial amount set: ${amount}`);
-    } catch (error: any) {
-      this.logger.error(`setInitialAmount xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`setInitialAmount xatolik: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
 
-  async getBatchData(ranges: string[]): Promise<any[][]> {
+  async getBatchData(ranges: string[]): Promise<string[][][]> {
     const response = await this.sheets.spreadsheets.values.batchGet({
       spreadsheetId: this.spreadsheetId,
       ranges,
@@ -442,7 +419,7 @@ export class GoogleSheetsService {
     return (response.data.valueRanges ?? []).map((r) => r.values ?? [[]]);
   }
 
-  async getValuesWithFormulas(range: string): Promise<any[][]> {
+  async getValuesWithFormulas(range: string): Promise<string[][]> {
     const response = await this.sheets.spreadsheets.values.get({
       spreadsheetId: this.spreadsheetId,
       range,
@@ -460,8 +437,8 @@ export class GoogleSheetsService {
       const svodkaMonth = response.data.values?.[0]?.[0];
       const monthOnly = sheetName.split(' ')[0];
       return svodkaMonth === monthOnly;
-    } catch (error: any) {
-      this.logger.error(`validateSheetNameSync xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`validateSheetNameSync xatolik: ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
   }
@@ -481,8 +458,8 @@ export class GoogleSheetsService {
       if (!exists) {
         await this.createSheet(sheetName);
       }
-    } catch (error: any) {
-      this.logger.error(`ensureSheetExists xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`ensureSheetExists xatolik: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
@@ -525,8 +502,8 @@ export class GoogleSheetsService {
       });
 
       this.logger.log(`✅ Sheet yaratildi: ${sheetName}`);
-    } catch (error: any) {
-      this.logger.error(`createSheet xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`createSheet xatolik: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
@@ -540,8 +517,8 @@ export class GoogleSheetsService {
       });
       const rows = response.data.values || [];
       return { sheetName, headers: rows[0] || [], rows: rows.slice(1) };
-    } catch (error: any) {
-      this.logger.error(`readSheet xatolik: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`readSheet xatolik: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
@@ -557,7 +534,7 @@ export class GoogleSheetsService {
     const sheet = spreadsheet.data.sheets?.find(
       (s) => s.properties?.title === sheetName,
     );
-    if (!sheet?.properties?.sheetId && sheet?.properties?.sheetId !== 0) {
+    if (sheet?.properties?.sheetId == null) {
       throw new Error(`Sheet "${sheetName}" topilmadi`);
     }
     return sheet.properties.sheetId;

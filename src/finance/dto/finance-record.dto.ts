@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsIn, IsOptional } from 'class-validator';
+import { IsString, IsNumber, IsIn, IsOptional, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
@@ -12,6 +12,7 @@ export class CreateFinanceRecordDto {
     required: true,
   })
   @IsString()
+  @MaxLength(100)
   date: string;
 
   @ApiProperty({
@@ -28,6 +29,7 @@ export class CreateFinanceRecordDto {
     required: true,
   })
   @IsString()
+  @MaxLength(200)
   description: string;
 
   @ApiProperty({
@@ -36,6 +38,7 @@ export class CreateFinanceRecordDto {
     required: true,
   })
   @IsString()
+  @MaxLength(100)
   category: string;
 
   @ApiProperty({
@@ -58,8 +61,9 @@ export class UpdateFinanceRecordDto {
     description: "Yangi sana (agar o'zgartirilayotgan bo'lsa)",
     example: '2026-03-30',
   })
-  @IsOptional()
   @IsString()
+  @MaxLength(100)
+  @IsOptional()
   date?: string;
 
   @ApiPropertyOptional({
@@ -76,6 +80,7 @@ export class UpdateFinanceRecordDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   description?: string;
 
   @ApiPropertyOptional({
@@ -84,6 +89,7 @@ export class UpdateFinanceRecordDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   category?: string;
 
   @ApiPropertyOptional({
