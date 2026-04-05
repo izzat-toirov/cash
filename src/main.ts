@@ -45,7 +45,7 @@ async function bootstrap() {
   });
 
   const port = process.env.PORT || 3000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   console.log(`Ilova ishga tushdi: http://localhost:${port}`);
   console.log(`Swagger hujjatlari: http://localhost:${port}/docs`);
 }
