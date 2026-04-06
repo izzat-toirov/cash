@@ -14,29 +14,26 @@ export class FinanceService {
 
   constructor(private googleSheetsService: GoogleSheetsService) {}
 
-  // ─── ADD ──────────────────────────────────────────────────────────────────────
 
   async addFinanceRecord(record: Omit<FinanceRecord, 'id'>): Promise<void> {
     try {
       const sheetName = this.getSheetNameFromDate(record.date);
   
       if (record.type === 'expense') {
-        // Xarajat: B=date, C=amount, D=description, E=category
         const rowData = [
           record.date,
           record.amount.toString(),
-          record.description || '',
           record.category,
+          record.description || '',
         ];
         await this.googleSheetsService.addExpenseRow(sheetName, rowData);
   
       } else {
-        // Daromad: H=date, I=description, J=category, K=amount
         const rowData = [
           record.date,
-          record.description || '',
-          record.category,
           record.amount.toString(),
+          record.category,
+          record.description || '',
         ];
         await this.googleSheetsService.addIncomeRow(sheetName, rowData);
       }
@@ -48,7 +45,6 @@ export class FinanceService {
     }
   }
 
-  // --- SVODKA MA'LUMOTLARINI OLISH ---
   async getSvodkaReport() {
     const sheet = SHEET_CONSTANTS.SVODKA_SHEET_NAME;
     const ranges = [
@@ -68,7 +64,6 @@ export class FinanceService {
     };
   }
 
-  // ─── READ ─────────────────────────────────────────────────────────────────────
 
   async getCurrentMonthRecords(): Promise<FinanceRecord[]> {
     try {
@@ -152,12 +147,10 @@ export class FinanceService {
       const type = match[1] as 'income' | 'expense';
       const rowIndex = Number(match[2]);
 
-      // 2. Sheet nomini aniqlash
       const y = year ?? new Date().getFullYear();
       const m = month ?? new Date().getMonth() + 1;
       const sheetName = this.googleSheetsService.getSheetName(y, m);
 
-      // 3. Mavjud recordni olish
       const records =
         await this.googleSheetsService.getFinanceRecords(sheetName);
       const existing = records.find((r) => r.id === id);
@@ -165,7 +158,6 @@ export class FinanceService {
         throw new NotFoundException(`Record "${id}" topilmadi`);
       }
 
-      // 4. Yangilangan qatorni tuzish
       const rowData = [
         record.date ?? existing.date,
         String(record.amount ?? existing.amount),
@@ -173,7 +165,6 @@ export class FinanceService {
         record.category ?? existing.category,
       ];
 
-      // 5. To'g'ri ustunlarga yozish (expense→B:E, income→G:J)
       await this.googleSheetsService.updateRow(
         sheetName,
         rowIndex,
@@ -221,7 +212,6 @@ export class FinanceService {
     }
   }
 
-  // ─── BALANCE ──────────────────────────────────────────────────────────────────
 
   async calculateBalance(
     year?: number,
@@ -234,22 +224,33 @@ export class FinanceService {
     try {
       const y = year ?? new Date().getFullYear();
       const m = month ?? new Date().getMonth() + 1;
-      const sheetName = this.googleSheetsService.getSheetName(y, m);
-      const records =
-        await this.googleSheetsService.getFinanceRecords(sheetName);
-
-      const totalIncome = records
-        .filter((r) => r.type === 'income')
-        .reduce((sum, r) => sum + r.amount, 0);
-
-      const totalExpense = records
-        .filter((r) => r.type === 'expense')
-        .reduce((sum, r) => sum + r.amount, 0);
-
+  
+      // Svodka sheetidan o'qiymiz
+      const svodkaSheet = 'Сводка'; // yoki getSheetName bilan o'zgartirsangiz
+  
+      const [expenseResp, incomeResp] = await Promise.all([
+        this.googleSheetsService.sheets.spreadsheets.values.get({
+          spreadsheetId: this.googleSheetsService.spreadsheetId,
+          range: `${svodkaSheet}!C22`,
+        }),
+        this.googleSheetsService.sheets.spreadsheets.values.get({
+          spreadsheetId: this.googleSheetsService.spreadsheetId,
+          range: `${svodkaSheet}!I22`,
+        }),
+      ]);
+  
+      const rawExpense = expenseResp.data.values?.[0]?.[0] ?? '0';
+      const rawIncome  = incomeResp.data.values?.[0]?.[0]  ?? '0';
+  
+      const totalExpense = parseFloat(String(rawExpense).replace(/[^\d.-]/g, '')) || 0;
+      const totalIncome  = parseFloat(String(rawIncome).replace(/[^\d.-]/g, ''))  || 0;
       const balance = totalIncome - totalExpense;
+      
+  
       this.logger.log(
-        `Balance: income=${totalIncome}, expense=${totalExpense}, balance=${balance}`,
+        `Balance from Сводка: income=${totalIncome}, expense=${totalExpense}, balance=${balance}`,
       );
+  
       return { totalIncome, totalExpense, balance };
     } catch (error: any) {
       this.logger.error(`Error calculating balance: ${error.message}`);
@@ -257,7 +258,6 @@ export class FinanceService {
     }
   }
 
-  // ─── CATEGORIES ───────────────────────────────────────────────────────────────
 
   async getCategories() {
     try {
@@ -268,7 +268,6 @@ export class FinanceService {
     }
   }
 
-  // ─── PRIVATE HELPERS ──────────────────────────────────────────────────────────
 
   private getSheetNameFromDate(date: string): string {
     let year: number;

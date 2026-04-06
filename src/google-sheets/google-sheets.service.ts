@@ -54,6 +54,15 @@ export class GoogleSheetsService {
     return this.MONTHS_UZ[month - 1];
   }
 
+  async getCellValue(sheetName: string, cell: string): Promise<number> {
+    const resp = await this.sheets.spreadsheets.values.get({
+      spreadsheetId: this.spreadsheetId,
+      range: `${sheetName}!${cell}`,
+    });
+    const raw = resp.data.values?.[0]?.[0] ?? '0';
+    return parseFloat(String(raw).replace(/[^\d.-]/g, '')) || 0;
+  }
+
 
   async addExpenseRow(sheetName: string, rowData: string[]): Promise<void> {
     try {
@@ -75,23 +84,19 @@ export class GoogleSheetsService {
     }
   }
 
-  /**
-   * Daromad qo'shish: H=date, I=description, J=category, K=amount
-   */
   async addIncomeRow(sheetName: string, rowData: string[]): Promise<void> {
     try {
       await this.ensureSheetExists(sheetName);
       const nextRow = await this.getNextAvailableRow(sheetName, 'income');
 
-      // rowData: [date, description, category, amount]
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `${sheetName}!H${nextRow}:K${nextRow}`,
+        range: `${sheetName}!G${nextRow}:J${nextRow}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [rowData] },
       });
 
-      this.logger.log(`✅ Daromad ${nextRow}-qatorga yozildi (H:K): ${JSON.stringify(rowData)}`);
+      this.logger.log(`✅ Daromad ${nextRow}-qatorga yozildi (G:J): ${JSON.stringify(rowData)}`);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`addIncomeRow xatolik: ${message}`);
@@ -99,30 +104,22 @@ export class GoogleSheetsService {
     }
   }
 
-  /**
-   * @deprecated addExpenseRow yoki addIncomeRow ishlatilsin
-   * Eski transactions.service.ts uchun qoldirildi — ichida addExpenseRow/addIncomeRow chaqiradi
-   */
   async addRow(sheetName: string, rowData: string[]): Promise<void> {
-    const type = rowData[rowData.length - 1]; // oxirgi element = type
+    const type = rowData[rowData.length - 1];
 
     if (type === 'expense') {
-      // rowData: [date, '', amount, description, category, 'expense']
-      // B:E uchun: [date, amount, description, category]
       await this.addExpenseRow(sheetName, [
-        rowData[0], // date
-        rowData[2], // amount
-        rowData[3], // description
-        rowData[4], // category
+        rowData[0],
+        rowData[2],
+        rowData[3],
+        rowData[4],
       ]);
     } else if (type === 'income') {
-      // rowData: [date, '', amount, description, category, 'income']
-      // H:K uchun: [date, description, category, amount]
       await this.addIncomeRow(sheetName, [
-        rowData[0], // date
-        rowData[3], // description
-        rowData[4], // category
-        rowData[2], // amount
+        rowData[0],
+        rowData[3], 
+        rowData[4],
+        rowData[2], 
       ]);
     } else {
       throw new Error(`Noto'g'ri type: "${type}"`);
@@ -133,7 +130,6 @@ export class GoogleSheetsService {
   async getFinanceRecords(sheetName: string): Promise<FinanceRecord[]> {
     const records: FinanceRecord[] = [];
 
-    // ✅ XARAJAT: B=date, C=amount, D=description, E=category
     try {
       const expenseResp = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
@@ -146,8 +142,8 @@ export class GoogleSheetsService {
             id: `expense-row-${index + 5}`,
             date: row[0],
             amount: parseFloat(String(row[1]).replace(/[^\d.-]/g, '')) || 0,
-            description: row[2] || '',
-            category: row[3] || '',
+            description: row[3] || '',  
+            category: row[2] || '',    
             type: 'expense',
           });
         }
@@ -156,22 +152,20 @@ export class GoogleSheetsService {
       this.logger.error(`Xarajat o'qishda xatolik: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    // ✅ DAROMAD: H=date, I=description, J=category, K=amount
     try {
       const incomeResp = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${sheetName}!H5:K${SHEET_CONSTANTS.MAX_ROWS_PER_REQUEST}`,
+        range: `${sheetName}!G5:J${SHEET_CONSTANTS.MAX_ROWS_PER_REQUEST}`,
       });
 
       (incomeResp.data.values || []).forEach((row, index) => {
-        // row[0]=H=date, row[1]=I=description, row[2]=J=category, row[3]=K=amount
-        if (row[0] && row[3]) {
+        if (row[0] && row[1]) {
           records.push({
             id: `income-row-${index + 5}`,
             date: row[0],
-            amount: parseFloat(String(row[3]).replace(/[^\d.-]/g, '')) || 0,
-            description: row[1] || '',
+            amount: parseFloat(String(row[1]).replace(/[^\d.-]/g, '')) || 0,
             category: row[2] || '',
+            description: row[3] || '',
             type: 'income',
           });
         }
@@ -197,18 +191,15 @@ export class GoogleSheetsService {
       let values: string[];
 
       if (type === 'expense') {
-        // rowData: [date, amount, description, category]
         range = `${sheetName}!B${rowIndex}:E${rowIndex}`;
-        values = rowData; // to'g'ridan-to'g'ri B:E ga yoziladi
+        values = rowData;
       } else {
-        // rowData kelishi mumkin: [date, amount, description, category] (eski format)
-        // H:K uchun: [date, description, category, amount]
         range = `${sheetName}!H${rowIndex}:K${rowIndex}`;
         values = [
-          rowData[0], // date
-          rowData[2], // description
-          rowData[3], // category
-          rowData[1], // amount
+          rowData[0],
+          rowData[2],
+          rowData[3],
+          rowData[1],
         ];
       }
 
@@ -263,8 +254,8 @@ export class GoogleSheetsService {
       const response = await this.sheets.spreadsheets.values.batchGet({
         spreadsheetId: this.spreadsheetId,
         ranges: [
-          'Сводка!B28:B45',
-          'Сводка!H28:H45', 
+          'Сводка!B38:B1000',
+          'Сводка!H8:H1000', 
         ],
       });
   
@@ -329,21 +320,18 @@ export class GoogleSheetsService {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // SVODKA
-  // ─────────────────────────────────────────────────────────────────────────────
 
   async readSvodka(): Promise<SvodkaData> {
     try {
       const resp = await this.sheets.spreadsheets.values.batchGet({
         spreadsheetId: this.spreadsheetId,
         ranges: [
-          'Сводка!D21', // Xarajat rejalashtirilgan
-          'Сводка!D22', // Xarajat haqiqiy
-          'Сводка!J21', // Daromad rejalashtirilgan
-          'Сводка!J22', // Daromad haqiqiy
-          'Сводка!B28:E45', // Xarajat kategoriyalari
-          'Сводка!H28:K45', // Daromad kategoriyalari
+          'Сводка!D21',
+          'Сводка!D22',
+          'Сводка!J21',
+          'Сводка!J22',
+          'Сводка!B28:E45',
+          'Сводка!H28:K45',
         ],
       });
 
@@ -443,9 +431,6 @@ export class GoogleSheetsService {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // SHEET MANAGEMENT
-  // ─────────────────────────────────────────────────────────────────────────────
 
   async ensureSheetExists(sheetName: string): Promise<void> {
     try {
@@ -523,9 +508,6 @@ export class GoogleSheetsService {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // PRIVATE HELPERS
-  // ─────────────────────────────────────────────────────────────────────────────
 
   private async getSheetId(sheetName: string): Promise<number> {
     const spreadsheet = await this.sheets.spreadsheets.get({
@@ -540,18 +522,13 @@ export class GoogleSheetsService {
     return sheet.properties.sheetId;
   }
 
-  /**
-   * Keyingi bo'sh qatorni topadi
-   * expense → E ustunini tekshiradi (kategoriya)
-   * income  → J ustunini tekshiradi (kategoriya)
-   */
+
   private async getNextAvailableRow(
     sheetName: string,
     type: 'income' | 'expense',
   ): Promise<number> {
     const startRow = 5;
-    // ✅ SVODKA FORMULA: expense=E kategoriya, income=J kategoriya
-    const column = type === 'expense' ? 'E' : 'J';
+    const column = type === 'expense' ? 'C' : 'H';
 
     const response = await this.sheets.spreadsheets.values.get({
       spreadsheetId: this.spreadsheetId,

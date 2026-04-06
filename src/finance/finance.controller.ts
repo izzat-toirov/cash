@@ -38,7 +38,6 @@ import {
 export class FinanceController {
   constructor(private financeService: FinanceService) {}
 
-  // ── POST /finance ────────────────────────────────────────────────────────────
 
   @Post()
   @ApiOperation({
@@ -71,7 +70,6 @@ Daromad yoki xarajat qo'shadi. \`date\` maydonidan avtomatik sheet nomi aniqlana
     return { message: "Ma'lumot muvaffaqiyatli saqlandi", data: result };
   }
 
-  // ── GET /finance ─────────────────────────────────────────────────────────────
 
   @Get()
   @ApiOperation({
@@ -110,7 +108,6 @@ Daromad yoki xarajat qo'shadi. \`date\` maydonidan avtomatik sheet nomi aniqlana
     return this.financeService.getCurrentMonthRecords();
   }
 
-  // ── GET /finance/balance ──────────────────────────────────────────────────────
 
   @Get('balance')
   @ApiOperation({
@@ -153,7 +150,6 @@ Daromad yoki xarajat qo'shadi. \`date\` maydonidan avtomatik sheet nomi aniqlana
     );
   }
 
-  // ── GET /finance/categories ───────────────────────────────────────────────────
 
   @Get('categories')
   @ApiOperation({
@@ -174,7 +170,6 @@ Daromad yoki xarajat qo'shadi. \`date\` maydonidan avtomatik sheet nomi aniqlana
     return this.financeService.getCategories();
   }
 
-  // ── GET /finance/records ──────────────────────────────────────────────────────
 
   @Get('records')
   @ApiOperation({
