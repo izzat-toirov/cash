@@ -36,7 +36,6 @@ import { ApiKeyGuard } from '../auth/api-key.guard';
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
-  // ── POST /transactions ────────────────────────────────────────────────────────
 
   @Post()
   @ApiOperation({

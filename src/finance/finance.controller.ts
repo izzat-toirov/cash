@@ -8,6 +8,8 @@ import {
   Param,
   Query,
   UseGuards,
+  Patch,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { FinanceService } from './finance.service';
 import {
@@ -330,4 +332,69 @@ Google Sheets\'dan o\'sha qatorni to\'liq o\'chiradi.
     );
     return { message: "Yozuv muvaffaqiyatli o'chirildi", id };
   }
+
+
+  @Get('initial-amounts')
+@ApiOperation({
+  summary: "Boshlang'ich summalarni olish",
+  description: `Сводка sheetidan D17:E21 oralig'idagi boshlang'ich summalarni qaytaradi.
+- 0: Uzum bank karta
+- 1: Uzcard 2582
+- 2: Naqd pullar so'm
+- 3: Naqd AQSH dollari
+- 4: Va boshqalar`,
+})
+@ApiResponse({
+  status: 200,
+  description: "Boshlang'ich summalar ro'yxati",
+})
+async getInitialAmounts() {
+  return this.financeService.getInitialAmounts();
+}
+
+@Patch('initial-amounts/:rowIndex')
+@ApiOperation({
+  summary: "Boshlang'ich summani yangilash",
+  description: `Сводка sheetidagi E17:E21 qatorlaridan birini yangilaydi.
+
+rowIndex qiymatlari:
+- 0 → Uzum bank karta (E17)
+- 1 → Uzcard 2582 (E18)
+- 2 → Naqd pullar so'm (E19)
+- 3 → Naqd AQSH dollari (E20)
+- 4 → Va boshqalar (E21)`,
+})
+@ApiParam({
+  name: 'rowIndex',
+  type: Number,
+  description: 'Qator indeksi (0–4)',
+  example: 0,
+})
+@ApiBody({
+  schema: {
+    type: 'object',
+    properties: {
+      amount: {
+        type: 'number',
+        example: 150000,
+        description: "Yangi summa",
+      },
+    },
+    required: ['amount'],
+  },
+})
+@ApiResponse({
+  status: 200,
+  description: "Summa muvaffaqiyatli yangilandi",
+})
+@ApiResponse({
+  status: 400,
+  description: "Noto'g'ri rowIndex (0–4 bo'lishi kerak)",
+})
+async updateInitialAmount(
+  @Param('rowIndex', ParseIntPipe) rowIndex: number,
+  @Body('amount') amount: number,
+) {
+  return await this.financeService.updateInitialAmount(rowIndex, amount);
+}
 }

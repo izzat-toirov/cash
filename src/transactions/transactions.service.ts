@@ -9,7 +9,6 @@ export class TransactionsService {
 
   constructor(private readonly sheetsService: GoogleSheetsService) {}
 
-  // ─── POST /transactions ───────────────────────────────────────────────────────
 
   async create(dto: CreateTransactionDto) {
     const year = dto.year ?? new Date().getFullYear();
@@ -17,22 +16,18 @@ export class TransactionsService {
     const sheetName = this.sheetsService.getSheetName(year, month);
 
     if (dto.type === 'expense') {
-      // ✅ SVODKA FORMULA: B=date, C=amount, D=description, E=category
-      // =SUMIF(Sheet!E:E; $B27; Sheet!C:C) → E=kategoriya, C=summa
       await this.sheetsService.addExpenseRow(sheetName, [
-        dto.date,                    // B = date
-        String(dto.amount),          // C = amount ✅ summa
-        dto.description ?? '',       // D = description
-        dto.category,                // E = category ✅ SUMIF shu ustundan qidiradi
+        dto.date,                
+        String(dto.amount),      
+        dto.category,       
+        dto.description ?? '',    
       ]);
     } else {
-      // ✅ SVODKA FORMULA: H=date, I=description, J=category, K=amount
-      // =SUMIF(Sheet!J:J; $H27; Sheet!K:K) → J=kategoriya, K=summa
       await this.sheetsService.addIncomeRow(sheetName, [
-        dto.date,                    // H = date
-        dto.description ?? '',       // I = description
-        dto.category,                // J = category ✅ SUMIF shu ustundan qidiradi
-        String(dto.amount),          // K = amount ✅ summa
+        dto.date,                   
+        String(dto.amount),       
+        dto.category,              
+        dto.description ?? '',     
       ]);
     }
 

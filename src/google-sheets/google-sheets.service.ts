@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { google, sheets_v4 } from 'googleapis';
 import {
@@ -542,5 +542,72 @@ export class GoogleSheetsService {
       }
     }
     return startRow + rows.length;
+  }
+
+  async getInitialAmounts(): Promise<{ items: { label: string; amount: number }[]; totalBalance: number }> {
+    try {
+      const [amountsResp, balanceResp] = await Promise.all([
+        this.sheets.spreadsheets.values.get({
+          spreadsheetId: this.spreadsheetId,
+          range: `Сводка!C17:E21`,
+        }),
+        this.sheets.spreadsheets.values.get({
+          spreadsheetId: this.spreadsheetId,
+          range: `Сводка!F17`,
+        }),
+      ]);
+
+      const rows = amountsResp.data.values || [];
+      const totalBalance = parseFloat(
+        String(balanceResp.data.values?.[0]?.[0] || '0').replace(/[^\d.-]/g, '')
+      ) || 0;
+
+      return {
+        items: rows.map((row) => ({
+          label: row[0] || '',
+          amount: parseFloat(String(row[2] || '0').replace(/[^\d.-]/g, '')) || 0,
+        })),
+        totalBalance,
+      };
+
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`getInitialAmounts xatolik: ${message}`);
+      throw error;
+    }
+  }
+  
+  async updateInitialAmount(rowIndex: number, amount: number): Promise<{ success: boolean; message: string; sheetRow: number; amount: number }> {
+    let sheetRow: number;
+  
+    if (rowIndex >= 17 && rowIndex <= 21) {
+      sheetRow = rowIndex;
+    } else if (rowIndex >= 0 && rowIndex <= 4) {
+      sheetRow = 17 + rowIndex;
+    } else {
+      throw new BadRequestException('rowIndex 0–4 yoki 17–21 bo\'lishi kerak');
+    }
+  
+    try {
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `Сводка!E${sheetRow}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [[amount.toString()]] },
+      });
+  
+      this.logger.log(`✅ InitialAmount ${sheetRow}-qator yangilandi: ${amount}`);
+      
+      return {
+        success: true,
+        message: "Summa muvaffaqiyatli yangilandi",
+        sheetRow,
+        amount,
+      };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`updateInitialAmount xatolik: ${message}`);
+      throw error;
+    }
   }
 }

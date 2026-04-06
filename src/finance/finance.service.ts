@@ -180,7 +180,6 @@ export class FinanceService {
     }
   }
 
-  // ─── DELETE ───────────────────────────────────────────────────────────────────
 
   /**
    * @param id    - "expense-row-5" yoki "income-row-7"
@@ -225,26 +224,31 @@ export class FinanceService {
       const y = year ?? new Date().getFullYear();
       const m = month ?? new Date().getMonth() + 1;
   
-      // Svodka sheetidan o'qiymiz
-      const svodkaSheet = 'Сводка'; // yoki getSheetName bilan o'zgartirsangiz
+      const svodkaSheet = 'Сводка';
   
-      const [expenseResp, incomeResp] = await Promise.all([
+      const [expenseResp, incomeResp, balanceResp] = await Promise.all([
         this.googleSheetsService.sheets.spreadsheets.values.get({
           spreadsheetId: this.googleSheetsService.spreadsheetId,
-          range: `${svodkaSheet}!C22`,
+          range: `${svodkaSheet}!C24`,
         }),
         this.googleSheetsService.sheets.spreadsheets.values.get({
           spreadsheetId: this.googleSheetsService.spreadsheetId,
-          range: `${svodkaSheet}!I22`,
+          range: `${svodkaSheet}!I24`,
+        }),
+        this.googleSheetsService.sheets.spreadsheets.values.get({
+          spreadsheetId: this.googleSheetsService.spreadsheetId,
+          range: `${svodkaSheet}!E15`, 
         }),
       ]);
   
       const rawExpense = expenseResp.data.values?.[0]?.[0] ?? '0';
       const rawIncome  = incomeResp.data.values?.[0]?.[0]  ?? '0';
+      const rawBalance = balanceResp.data.values?.[0]?.[0] ?? '0';
   
       const totalExpense = parseFloat(String(rawExpense).replace(/[^\d.-]/g, '')) || 0;
       const totalIncome  = parseFloat(String(rawIncome).replace(/[^\d.-]/g, ''))  || 0;
-      const balance = totalIncome - totalExpense;
+      const balance      = parseFloat(String(rawBalance).replace(/[^\d.-]/g, '')) || 0;
+      // const balance = totalIncome - totalExpense;
       
   
       this.logger.log(
@@ -298,6 +302,24 @@ export class FinanceService {
     } catch (error) {
       this.logger.error(`Error parsing date "${date}": ${error instanceof Error ? error.message : String(error)}`);
       return this.googleSheetsService.getCurrentMonthSheetName();
+    }
+  }
+
+  async getInitialAmounts() {
+    try {
+      return await this.googleSheetsService.getInitialAmounts();
+    } catch (error: any) {
+      this.logger.error(`Error fetching initial amounts: ${error.message}`);
+      throw new BadRequestException('Failed to fetch initial amounts');
+    }
+  }
+  
+  async updateInitialAmount(rowIndex: number, amount: number) {
+    try {
+      return await this.googleSheetsService.updateInitialAmount(rowIndex, amount);
+    } catch (error: any) {
+      this.logger.error(`Error updating initial amount: ${error.message}`);
+      throw new BadRequestException('Failed to update initial amount');
     }
   }
 }
