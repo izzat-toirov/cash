@@ -92,6 +92,20 @@ Daromad yoki xarajat qo'shadi. \`date\` yoki \`month\`/\`year\` dan sheet nomi a
     description: 'Yil. Default: joriy yil',
     example: 2026,
   })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Sahifa raqami. Default: 1',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Har sahifadagi yozuvlar soni. Default: 10',
+    example: 10,
+  })
   @ApiResponse({
     status: 200,
     description: "Tranzaksiyalar ro'yxati",
@@ -116,15 +130,27 @@ Daromad yoki xarajat qo'shadi. \`date\` yoki \`month\`/\`year\` dan sheet nomi a
             type: 'income',
           },
         ],
+        meta: {
+          total: 100,
+          page: 1,
+          limit: 10,
+          totalPages: 10,
+        },
       },
     },
   })
-  findAll(@Query('month') month?: string, @Query('year') year?: string) {
+  findAll(
+    @Query('month') month?: string,
+    @Query('year') year?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     const m = month ? Number(month) : new Date().getMonth() + 1;
     const y = year ? Number(year) : new Date().getFullYear();
-    return this.transactionsService.findByMonth(m, y);
+    const p = page ? Number(page) : 1;
+    const l = limit ? Number(limit) : 10;
+    return this.transactionsService.findByMonth(m, y, p, l);
   }
-
   // ── GET /transactions/:id ─────────────────────────────────────────────────────
 
   @Get(':id')

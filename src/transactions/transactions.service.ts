@@ -76,10 +76,29 @@ export class TransactionsService {
 
   // ─── GET /transactions?month=5&year=2026 ─────────────────────────────────────
 
-  async findByMonth(month: number, year: number) {
+  async findByMonth(month: number, year: number, page: number, limit: number) {
     const sheetName = this.sheetsService.getSheetName(year, month);
     const records = await this.sheetsService.getFinanceRecords(sheetName);
-    return { success: true, data: records };
+  
+    const sorted = [...records].sort((a, b) => {
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+  
+    const total = sorted.length;
+    const totalPages = Math.ceil(total / limit);
+    const start = (page - 1) * limit;
+    const data = sorted.slice(start, start + limit);
+  
+    return {
+      success: true,
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+    };
   }
 
   // ─── GET /transactions/:id ────────────────────────────────────────────────────
