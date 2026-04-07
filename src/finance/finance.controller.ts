@@ -439,4 +439,19 @@ async getAvailableSheets() {
 async setActiveSheet(@Body('sheetName') sheetName: string) {
   return this.financeService.setActiveSheet(sheetName);
 }
+
+@Get('sheets/active')
+@ApiOperation({
+  summary: "Hozirgi aktiv oyni olish",
+  description: "Сводка sheetidagi F2 katakdagi joriy qiymatni qaytaradi.",
+})
+@ApiResponse({
+  status: 200,
+  schema: {
+    example: { name: 'Aprel 2025', month: 4, year: 2025 }
+  }
+})
+async getActiveSheet() {
+  return this.financeService.getActiveSheet();
+}
 }

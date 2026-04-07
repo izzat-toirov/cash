@@ -398,4 +398,30 @@ export class FinanceService {
       throw new BadRequestException('Failed to set active sheet');
     }
   }
+
+  async getActiveSheet(): Promise<{ name: string; month: number; year: number }> {
+    try {
+      const res = await this.googleSheetsService.sheets.spreadsheets.values.get({
+        spreadsheetId: this.googleSheetsService.spreadsheetId,
+        range: 'Сводка!F2',
+      });
+  
+      const name = res.data.values?.[0]?.[0] ?? '';
+  
+      const UZ_MONTHS: Record<string, number> = {
+        Yanvar: 1, Fevral: 2, Mart: 3, Aprel: 4,
+        May: 5, Iyun: 6, Iyul: 7, Avgust: 8,
+        Sentabr: 9, Oktabr: 10, Noyabr: 11, Dekabr: 12,
+      };
+  
+      const parts = name.trim().split(' ');
+      const month = UZ_MONTHS[parts[0]] ?? new Date().getMonth() + 1;
+      const year = parts[1] ? parseInt(parts[1]) : new Date().getFullYear();
+  
+      return { name, month, year };
+    } catch (error: any) {
+      this.logger.error(`Error fetching active sheet: ${error.message}`);
+      throw new BadRequestException('Failed to fetch active sheet');
+    }
+  }
 }
