@@ -556,16 +556,18 @@ export class GoogleSheetsService {
           range: `Сводка!F17`,
         }),
       ]);
+      const parseSheetNumber = (str: string | undefined): number => {
+        if (!str) return 0;
+        return parseFloat(str.replace(/\s/g, '').replace(',', '.')) || 0;
+      };
 
       const rows = amountsResp.data.values || [];
-      const totalBalance = parseFloat(
-        String(balanceResp.data.values?.[0]?.[0] || '0').replace(/[^\d.-]/g, '')
-      ) || 0;
+      const totalBalance = parseSheetNumber(String(balanceResp.data.values?.[0]?.[0] || ''));
 
       return {
         items: rows.map((row) => ({
           label: row[0] || '',
-          amount: parseFloat(String(row[2] || '0').replace(/[^\d.-]/g, '')) || 0,
+          amount: parseSheetNumber(row[2]),
         })),
         totalBalance,
       };
