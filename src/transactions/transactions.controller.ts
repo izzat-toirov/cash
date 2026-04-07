@@ -71,7 +71,6 @@ Daromad yoki xarajat qo'shadi. \`date\` yoki \`month\`/\`year\` dan sheet nomi a
     return this.transactionsService.create(dto);
   }
 
-  // ── GET /transactions ─────────────────────────────────────────────────────────
 
   @Get()
   @ApiOperation({
@@ -306,4 +305,6 @@ Google Sheets\'dan o\'sha qatorni to\'liq o\'chiradi.
       year ? Number(year) : undefined,
     );
   }
+
+  
 }

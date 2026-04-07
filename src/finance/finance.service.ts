@@ -322,4 +322,80 @@ export class FinanceService {
       throw new BadRequestException('Failed to update initial amount');
     }
   }
+
+
+  async getAvailableSheets(): Promise<{ sheets: { name: string; month: number; year: number }[] }> {
+    try {
+      // F2 dagi Data Validation ro'yxatini olish
+      const validationRes = await this.googleSheetsService.sheets.spreadsheets.get({
+        spreadsheetId: this.googleSheetsService.spreadsheetId,
+        ranges: ['Сводка!F2'],
+        includeGridData: true,
+      });
+  
+      const cellData = validationRes.data.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values?.[0];
+      const validation = cellData?.dataValidation?.condition;
+  
+      let sheetNames: string[] = [];
+  
+      if (validation?.type === 'ONE_OF_LIST') {
+        // Dropdown qiymatlari to'g'ridan-to'g'ri ro'yxatda
+        sheetNames = validation.values?.map((v) => v.userEnteredValue || '').filter(Boolean) ?? [];
+      } else if (validation?.type === 'ONE_OF_RANGE') {
+        // Dropdown boshqa rangega (masalan =Kategoriyalar!A1:A12) havola qilgan bo'lsa
+        const rangeRef = validation.values?.[0]?.userEnteredValue || '';
+        if (rangeRef) {
+          const rangeRes = await this.googleSheetsService.sheets.spreadsheets.values.get({
+            spreadsheetId: this.googleSheetsService.spreadsheetId,
+            range: rangeRef.replace(/^=/, ''),
+          });
+          sheetNames = (rangeRes.data.values || []).flat().filter(Boolean);
+        }
+      }
+  
+      const UZ_MONTHS: Record<string, number> = {
+        Yanvar: 1, Fevral: 2, Mart: 3, Aprel: 4,
+        May: 5, Iyun: 6, Iyul: 7, Avgust: 8,
+        Sentabr: 9, Oktabr: 10, Noyabr: 11, Dekabr: 12,
+      };
+  
+      const currentYear = new Date().getFullYear();
+  
+      const sheets = sheetNames
+        .map((name) => {
+          const parts = name.trim().split(' ');
+          const monthName = parts[0];
+          const year = parts[1] ? parseInt(parts[1]) : currentYear;
+          const month = UZ_MONTHS[monthName] ?? null;
+          return { name, month, year };
+        })
+        .filter((s) => s.month !== null)
+        .sort((a, b) => a.year !== b.year ? a.year - b.year : (a.month ?? 0) - (b.month ?? 0));
+  
+      return { sheets } as any;
+    } catch (error: any) {
+      this.logger.error(`Error fetching available sheets: ${error.message}`);
+      throw new BadRequestException('Failed to fetch available sheets');
+    }
+  }
+
+
+  async setActiveSheet(sheetName: string): Promise<{ success: boolean; sheetName: string }> {
+    try {
+      await this.googleSheetsService.sheets.spreadsheets.values.update({
+        spreadsheetId: this.googleSheetsService.spreadsheetId,
+        range: 'Сводка!F2',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [[sheetName]],
+        },
+      });
+  
+      this.logger.log(`Active sheet changed to: ${sheetName}`);
+      return { success: true, sheetName };
+    } catch (error: any) {
+      this.logger.error(`Error setting active sheet: ${error.message}`);
+      throw new BadRequestException('Failed to set active sheet');
+    }
+  }
 }

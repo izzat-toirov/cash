@@ -397,4 +397,46 @@ async updateInitialAmount(
 ) {
   return await this.financeService.updateInitialAmount(rowIndex, amount);
 }
+
+
+@Get('sheets')
+@ApiOperation({
+  summary: "Google Sheets dagi mavjud oylar ro'yxati",
+  description: "Сводка sheetidagi F2 katakdan mavjud sheet nomlarini qaytaradi.",
+})
+@ApiResponse({
+  status: 200,
+  schema: {
+    example: {
+      sheets: ['Mart', 'Aprel', 'May', 'Iyun']
+    }
+  }
+})
+async getAvailableSheets() {
+  return this.financeService.getAvailableSheets();
+}
+
+
+@Patch('sheets/active')
+@ApiOperation({
+  summary: "Сводка F2 katakdagi aktiv oyni o'zgartirish",
+  description: "F2 dagi dropdown qiymatini yangi oy nomi bilan yangilaydi.",
+})
+@ApiBody({
+  schema: {
+    type: 'object',
+    properties: {
+      sheetName: {
+        type: 'string',
+        example: 'May',
+        description: "Yangi aktiv oy nomi (F2 dropdown qiymati)",
+      },
+    },
+    required: ['sheetName'],
+  },
+})
+@ApiResponse({ status: 200, description: "Aktiv oy muvaffaqiyatli o'zgartirildi" })
+async setActiveSheet(@Body('sheetName') sheetName: string) {
+  return this.financeService.setActiveSheet(sheetName);
+}
 }
