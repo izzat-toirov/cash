@@ -255,7 +255,7 @@ export class GoogleSheetsService {
         spreadsheetId: this.spreadsheetId,
         ranges: [
           'Сводка!B38:B1000',
-          'Сводка!H8:H1000', 
+          'Сводка!H38:H1000', 
         ],
       });
   
