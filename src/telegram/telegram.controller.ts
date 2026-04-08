@@ -7,7 +7,7 @@ interface RequestWithUser extends Request {
   telegramUser?: any;
 }
 
-@Controller('api/telegram')
+@Controller('telegram')
 export class TelegramController {
   constructor(private readonly telegramService: TelegramService) {}
 
