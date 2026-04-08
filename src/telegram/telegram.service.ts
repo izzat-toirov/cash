@@ -5,6 +5,7 @@ import { Telegraf, Markup } from 'telegraf';
 @Injectable()
 export class TelegramService implements OnModuleInit, OnModuleDestroy {
   private bot: Telegraf;
+  private static  isRunning = false; // ← qo'sh
 
   constructor(private configService: ConfigService) {
     const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN') || '';
@@ -13,23 +14,37 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
-    const webhookUrl = this.configService.get<string>('WEBHOOK_URL'); // https://yourdomain.vercel.app
+    if (TelegramService.isRunning) return; // ← ikkinchi marta ishga tushmaydi
+    TelegramService.isRunning = true;
 
-    if (webhookUrl) {
-      // ✅ Vercel (production) — webhook
-      await this.bot.telegram.setWebhook(`${webhookUrl}/api/telegram/webhook`);
-      console.log('Webhook set:', `${webhookUrl}/api/telegram/webhook`);
+    const webhookUrl = this.configService.get<string>('WEBHOOK_URL');
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+
+    if (webhookUrl && nodeEnv === 'production') {
+      try {
+        await this.bot.telegram.setWebhook(`${webhookUrl}/api/telegram/webhook`);
+        console.log('Webhook set:', `${webhookUrl}/api/telegram/webhook`);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('Webhook set error:', message);
+      }
     } else {
-      // ✅ Local — long polling
+      try {
+        await this.bot.telegram.deleteWebhook({ drop_pending_updates: true });
+        console.log('Webhook deleted');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('Delete webhook error:', message);
+      }
       this.bot.launch().catch(err => console.error('Bot launch error:', err));
       console.log('Bot started with long polling');
     }
   }
 
   onModuleDestroy() {
-    // Webhook rejimida stop kerak emas, local da kerak
-    const webhookUrl = this.configService.get<string>('WEBHOOK_URL');
-    if (!webhookUrl) {
+    TelegramService.isRunning = false; // ← reset qil
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+    if (nodeEnv !== 'production') {
       this.bot.stop();
     }
   }
@@ -41,7 +56,6 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
 
     this.bot.command('start', (ctx) => {
       const userId = ctx.from.id.toString();
-
       if (allowedAdmins.includes(userId)) {
         return ctx.reply('Xush kelibsiz! Siz uchun Web App ochiq:',
           Markup.inlineKeyboard([
@@ -65,12 +79,10 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  // ✅ Webhook endpoint uchun — Controller chaqiradi
   async handleWebhook(body: any) {
     await this.bot.handleUpdate(body);
   }
 
-  // CRUD metodlari
   create() { return 'added'; }
   findAll() { return 'all'; }
   findOne(id: number) { return id; }
