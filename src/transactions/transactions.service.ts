@@ -101,6 +101,32 @@ export class TransactionsService {
     };
   }
 
+  async findRecent(month: number, year: number) {
+    const sheetName = this.sheetsService.getSheetName(year, month);
+    const records = await this.sheetsService.getFinanceRecords(sheetName);
+  
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+  
+    // Bugun yoki kechagi yozuvlar
+    const filtered = records.filter(
+      (r) => r.date === todayStr || r.date === yesterdayStr
+    );
+  
+    // Agar ikkalasida ham yo'q bo'lsa — oxirgi 5 ta
+    const sorted = [...(filtered.length > 0 ? filtered : records)]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 5);
+  
+    return {
+      success: true,
+      data: sorted,
+    };
+  }
+
   // ─── GET /transactions/:id ────────────────────────────────────────────────────
 
   async findOne(id: string, month?: number, year?: number) {
