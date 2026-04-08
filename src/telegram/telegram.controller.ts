@@ -1,18 +1,32 @@
-import { Controller, Get, UseGuards, Req } from '@nestjs/common';
-import { Request } from 'express'; // Express Request-ni import qiling
+import { Controller, Get, Post, Body, UseGuards, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { TelegramAuthGuard } from './guards/telegram-auth.guard';
+import { TelegramService } from './telegram.service';
 
-// TypeScript-ga Request ichida telegramUser borligini bildirish uchun interface
 interface RequestWithUser extends Request {
-  telegramUser?: any; // Yoki aniqroq foydalanuvchi turini yozishingiz mumkin
+  telegramUser?: any;
 }
 
-@Controller('api/transactions')
+@Controller('api/telegram')
+export class TelegramController {
+  constructor(private readonly telegramService: TelegramService) {}
+
+  // ✅ Telegram webhook — POST /api/telegram/webhook
+  @Post('webhook')
+  async handleWebhook(@Body() body: any) {
+    await this.telegramService.handleWebhook(body);
+    return { ok: true };
+  }
+}
+
+// ✅ Transactions controller o'zgarmaydi
+import { Controller as NestController, Get as NestGet, UseGuards as NestUseGuards, Req as NestReq } from '@nestjs/common';
+
+@NestController('api/transactions')
 export class TransactionsController {
-  
-  @Get()
-  @UseGuards(TelegramAuthGuard)
-  findAll(@Req() req: RequestWithUser) { // 'any' o'rniga yangi interfaceni ko'rsatamiz
+  @NestGet()
+  @NestUseGuards(TelegramAuthGuard)
+  findAll(@NestReq() req: RequestWithUser) {
     const user = req.telegramUser;
     return { message: `Foydalanuvchi ID: ${user?.id}` };
   }

@@ -544,9 +544,13 @@ export class GoogleSheetsService {
     return startRow + rows.length;
   }
 
-  async getInitialAmounts(): Promise<{ items: { label: string; amount: number }[]; totalBalance: number }> {
+  async getInitialAmounts(): Promise<{
+    items: { label: string; amount: number }[];
+    totalBalance: number;
+    currentBalance: number; 
+  }> {
     try {
-      const [amountsResp, balanceResp] = await Promise.all([
+      const [amountsResp, balanceResp, currentBalanceResp] = await Promise.all([
         this.sheets.spreadsheets.values.get({
           spreadsheetId: this.spreadsheetId,
           range: `Сводка!C17:E21`,
@@ -555,23 +559,30 @@ export class GoogleSheetsService {
           spreadsheetId: this.spreadsheetId,
           range: `Сводка!F17`,
         }),
+        this.sheets.spreadsheets.values.get({
+          spreadsheetId: this.spreadsheetId,
+          range: `Сводка!H17`,
+        }),
       ]);
+  
       const parseSheetNumber = (str: string | undefined): number => {
         if (!str) return 0;
         return parseFloat(str.replace(/\s/g, '').replace(',', '.')) || 0;
       };
-
+  
       const rows = amountsResp.data.values || [];
       const totalBalance = parseSheetNumber(String(balanceResp.data.values?.[0]?.[0] || ''));
-
+      const currentBalance = parseSheetNumber(String(currentBalanceResp.data.values?.[0]?.[0] || ''));
+  
       return {
         items: rows.map((row) => ({
           label: row[0] || '',
           amount: parseSheetNumber(row[2]),
         })),
         totalBalance,
+        currentBalance,
       };
-
+  
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`getInitialAmounts xatolik: ${message}`);
