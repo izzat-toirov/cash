@@ -3,9 +3,14 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import express from 'express';
+
+const server = express();
+export default server; // ← Vercel uchun
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
 
   app.enableCors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3001'],
@@ -44,9 +49,15 @@ async function bootstrap() {
     },
   });
 
-  const port = process.env.PORT || 3000;
-  await app.listen(port, '0.0.0.0');
-  console.log(`Ilova ishga tushdi: http://localhost:${port}`);
-  console.log(`Swagger hujjatlari: http://localhost:${port}/docs`);
+  // Vercel'da listen kerak emas, lokal uchun saqlab qolamiz
+  if (process.env.NODE_ENV !== 'production') {
+    const port = process.env.PORT || 3000;
+    await app.listen(port, '0.0.0.0');
+    console.log(`Ilova ishga tushdi: http://localhost:${port}`);
+    console.log(`Swagger hujjatlari: http://localhost:${port}/docs`);
+  } else {
+    await app.init();
+  }
 }
+
 bootstrap();
