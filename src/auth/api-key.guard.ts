@@ -1,80 +1,94 @@
-import { Injectable, CanActivate, ExecutionContext, OnApplicationShutdown } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
+  HttpException,
+  HttpStatus,
+  OnApplicationShutdown,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 
-interface RateLimitStore {
-  [key: string]: { count: number; resetTime: number };
+interface RateLimitEntry {
+  count: number;
+  resetTime: number;
 }
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate, OnApplicationShutdown {
-  private rateLimitStore: RateLimitStore = {};
+  private readonly rateLimitStore = new Map<string, RateLimitEntry>();
   private readonly MAX_REQUESTS_PER_MINUTE = 100;
-  private readonly MINUTE_IN_MS = 60000;
-  private cleanupInterval: NodeJS.Timeout;
+  private readonly MINUTE_IN_MS = 60_000;
+  private readonly cleanupInterval: NodeJS.Timeout;
 
-  constructor(private configService: ConfigService) {
-    // Add periodic cleanup for rate limit store
-    this.cleanupInterval = setInterval(() => this.cleanupExpiredEntries(), this.MINUTE_IN_MS);
+  constructor(private readonly configService: ConfigService) {
+    this.cleanupInterval = setInterval(
+      () => this.cleanupExpiredEntries(),
+      this.MINUTE_IN_MS,
+    );
   }
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    const headerApiKey = request.headers['x-api-key'];
-    const apiKey = Array.isArray(headerApiKey) ? headerApiKey[0] : headerApiKey;
-    const ip = request.ip || request.socket?.remoteAddress || 'unknown';
 
-    if (typeof apiKey !== 'string') {
-      return false;
-    }
+    // API key olish
+    const raw = request.headers['x-api-key'];
+    const apiKey = Array.isArray(raw) ? raw[0] : raw;
 
-    // Rate limiting check
-    if (!this.checkRateLimit(ip)) {
-      return false;
-    }
-
+    // Key yo'q yoki bo'sh
     if (!apiKey) {
-      return false;
+      throw new UnauthorizedException('API kalit topilmadi');
     }
 
-    const validApiKey = this.configService.get('API_KEY');
+    // Rate limit tekshiruvi — 429 Too Many Requests
+    const ip = request.ip ?? request.socket?.remoteAddress ?? 'unknown';
+    if (!this.checkRateLimit(ip)) {
+      throw new HttpException(
+        'Juda ko\'p so\'rov. Bir daqiqadan so\'ng urinib ko\'ring.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
 
-    return apiKey === validApiKey;
+    // Key to'g'riligini tekshirish
+    const validApiKey = this.configService.get<string>('API_KEY');
+    if (apiKey !== validApiKey) {
+      throw new UnauthorizedException('API kalit noto\'g\'ri');
+    }
+
+    return true;
   }
 
   private checkRateLimit(clientIp: string): boolean {
     const now = Date.now();
-    const clientData = this.rateLimitStore[clientIp];
+    const entry = this.rateLimitStore.get(clientIp);
 
-    if (!clientData || now > clientData.resetTime) {
-      // Reset or initialize counter
-      this.rateLimitStore[clientIp] = {
+    if (!entry || now > entry.resetTime) {
+      this.rateLimitStore.set(clientIp, {
         count: 1,
         resetTime: now + this.MINUTE_IN_MS,
-      };
+      });
       return true;
     }
 
-    if (clientData.count >= this.MAX_REQUESTS_PER_MINUTE) {
+    if (entry.count >= this.MAX_REQUESTS_PER_MINUTE) {
       return false;
     }
 
-    clientData.count++;
+    entry.count++;
     return true;
   }
 
   private cleanupExpiredEntries(): void {
     const now = Date.now();
-    for (const [key, data] of Object.entries(this.rateLimitStore)) {
-      if (now > data.resetTime) {
-        delete this.rateLimitStore[key];
+    for (const [key, entry] of this.rateLimitStore) {
+      if (now > entry.resetTime) {
+        this.rateLimitStore.delete(key);
       }
     }
   }
 
-  onApplicationShutdown(signal?: string): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-    }
+  onApplicationShutdown(): void {
+    clearInterval(this.cleanupInterval);
   }
 }
