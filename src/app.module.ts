@@ -6,7 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { HealthModule } from './health/health.module';
 // import { WebsocketsModule } from './websockets/websockets.module';
-import { TelegramModule } from './telegram/telegram.module';
+// import { TelegramModule } from './telegram/telegram.module';
 import { TelegramService } from './telegram/telegram.service';
 
 @Module({
@@ -21,7 +21,7 @@ import { TelegramService } from './telegram/telegram.service';
     TransactionsModule,
     HealthModule,
     // WebsocketsModule,
-    TelegramModule,
+    // TelegramModule,
   ],
   providers: [TelegramService],
 })
