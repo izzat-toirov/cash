@@ -44,17 +44,18 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document, {
-    customCssUrl: [
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.min.css',
-    ],
+    customCssUrl: 'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.min.css',
     customJs: [
       'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-bundle.js',
       'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-standalone-preset.js',
     ],
     customSiteTitle: 'Moliya Boshqaruv API Docs',
+    swaggerOptions: {
+      dom_id: '#swagger-ui',
+      displayRequestDuration: true,
+    },
   });
 
-  // Vercel'da listen kerak emas, lokal uchun saqlab qolamiz
   if (process.env.NODE_ENV !== 'production') {
     const port = process.env.PORT || 3000;
     await app.listen(port, '0.0.0.0');
