@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/main" 
+    }
+  ],
   "builds": [
     {
       "src": "src/main.ts",
