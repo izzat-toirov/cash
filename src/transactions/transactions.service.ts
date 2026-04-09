@@ -106,19 +106,27 @@ export class TransactionsService {
     const records = await this.sheetsService.getFinanceRecords(sheetName);
   
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
   
-    // Bugun yoki kechagi yozuvlar
+    const formatDate = (d: Date): string =>
+      `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+  
+    const todayStr = formatDate(today);
+    const yesterdayStr = formatDate(yesterday);
+  
     const filtered = records.filter(
       (r) => r.date === todayStr || r.date === yesterdayStr
     );
   
-    // Agar ikkalasida ham yo'q bo'lsa — oxirgi 5 ta
     const sorted = [...(filtered.length > 0 ? filtered : records)]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .sort((a, b) => {
+        const parseDate = (str: string) => {
+          const [dd, mm, yyyy] = str.split('.');
+          return new Date(`${yyyy}-${mm}-${dd}`).getTime();
+        };
+        return parseDate(b.date) - parseDate(a.date);
+      })
       .slice(0, 5);
   
     return {
